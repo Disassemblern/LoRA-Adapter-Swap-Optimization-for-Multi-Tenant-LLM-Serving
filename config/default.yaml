@@ -1,0 +1,28 @@
+instance:
+  n_adapters: 10          # number of different LoRA adapters
+  n_gpus: 3               # how many GPUs in the cluster
+  n_requests: 100         # total incoming requests to schedule
+  n_time_slots: 15        # number of discrete time steps
+  adapter_memory_gb:
+    min: 0.5
+    max: 4.0              # each adapter uses between 0.5 and 4 GB of VRAM
+  vram_gb:
+    min: 24
+    max: 80               # each GPU has between 24 and 80 GB total VRAM
+  base_model_gb: 14.0     # the base LLM always occupies 14 GB (7B model in fp16)
+  request_priorities: [1, 2, 3]       # 1=low, 2=medium, 3=high
+  priority_weights: [0.2, 0.5, 0.3]  # probability of each priority being sampled
+  arrival: zipf           # "zipf" = some adapters are much more popular  
+  zipf_alpha: 1.2         # zipf distribution number. higher = hot adapters dominates the distirbution more
+  seed: 42                # random seed for reproducibility
+
+objective:
+  alpha: 1.0   # how much latency matters
+  beta: 2.0    # how much swap cost matters (2x means swaps are heavily penalized)
+  gamma: 0.5   # how much priority delay matters
+
+solver:
+  time_limit_sec: 300   # stop Gurobi after 5 minutes even if not optimal
+  mip_gap: 0.01         # accept solutions within 1% of optimal
+  threads: 0            # 0 = let Gurobi choose automatically
+  log_to_console: true  # print Gurobi's solving progress to the terminal
