@@ -1,7 +1,7 @@
 """
 Subcommands:
   generate  -- create a synthetic instance and save it to JSON
-  solve     -- solve a saved instance with gurobi, lru, or random
+  solve     -- solve a saved instance with gurobi or genetic
   verify    -- check that a solution satisfies all constraints
   plot      -- generate charts from a solution
 """
@@ -11,13 +11,10 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import yaml
 
 from src import data_generator, instance_io, model_gurobi, visualize
-from src.baselines.lru import LRUPolicy
-from src.baselines.random_evict import RandomPolicy
-from src.baselines.simulator import simulate
+from src.baselines.genetic import GeneticAlgorithm
 from src.solution import solution_to_dict, solution_from_dict, verify
 
 def _load_cfg(path: str) -> dict:
@@ -41,10 +38,8 @@ def cmd_solve(args: argparse.Namespace) -> None:
 
     if args.solver == "gurobi":
         sol = model_gurobi.build_and_solve(inst, cfg["solver"])
-    elif args.solver == "lru":
-        sol = simulate(inst, LRUPolicy())
-    elif args.solver == "random":
-        sol = simulate(inst, RandomPolicy(np.random.default_rng(0)))
+    elif args.solver == "genetic":
+        sol = GeneticAlgorithm(cfg.get("genetic", {})).solve(inst)
     else:
         print(f"Unknown solver: {args.solver}", file=sys.stderr)
         sys.exit(1)
@@ -97,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sol = sub.add_parser("solve", help="Solve a problem instance")
     p_sol.add_argument("--instance", required=True, help="Path to instance JSON")
-    p_sol.add_argument("--solver", choices=["gurobi", "lru", "random"], default="gurobi")
+    p_sol.add_argument("--solver", choices=["gurobi", "genetic"], default="gurobi")
     p_sol.add_argument("--config", default="config/default.yaml")
     p_sol.add_argument("--out", help="Output JSON path")
 
