@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 import numpy as np
 from src.data_types import Adapter, GPU, Request, Instance
 
@@ -40,17 +41,29 @@ def _make_gpus(cfg: dict, rng: np.random.Generator) -> list[GPU]:
     vram_min = cfg["vram_gb"]["min"]
     vram_max = cfg["vram_gb"]["max"]
     base_gb = cfg["base_model_gb"]
+    max_adapter_gb = cfg["adapter_memory_gb"]["max"]
 
     gpus = []
     for j in range(n):
         vram_gb = float(rng.uniform(vram_min, vram_max))
-        # faster GPUs handle more requests per slot; range 1-5
-        max_throughput = int(rng.integers(1, 6))
+        # faster GPUs handle more requests per slot; range 2-5
+        max_throughput = int(rng.integers(2, 6))
         gpus.append(GPU(id=j, vram_gb=vram_gb, base_model_gb=base_gb,
                         max_throughput=max_throughput))
 
-    # Guarantee that every adapter can fit on at least one GPU.
-    # If not, bump the smallest GPU's VRAM to make it work.
+    # Guarantee every adapter can fit on at least one GPU.
+    # If no GPU has enough free VRAM, bump the largest-VRAM GPU to cover it.
+    min_required = base_gb + max_adapter_gb
+    if all(g.vram_gb < min_required for g in gpus):
+        largest = max(range(len(gpus)), key=lambda j: gpus[j].vram_gb)
+        g = gpus[largest]
+        gpus[largest] = GPU(
+            id=g.id,
+            vram_gb=min_required,
+            base_model_gb=g.base_model_gb,
+            max_throughput=g.max_throughput,
+        )
+
     return gpus
 
 def _make_requests(cfg: dict, adapters: list[Adapter], gpus: list[GPU],
@@ -95,14 +108,53 @@ def _make_requests(cfg: dict, adapters: list[Adapter], gpus: list[GPU],
             priority=priority,
             latency_per_gpu=latency_per_gpu,
         ))
-    return requests
+
+    return _spread_requests(requests, gpus, n_slots)
+
+def _spread_requests(
+    requests: list[Request], gpus: list[GPU], n_slots: int
+) -> list[Request]:
+    """
+    Redistribute requests so no time slot receives more requests than the
+    total cluster throughput at that slot. Moves overflow requests to the
+    slot with the most remaining capacity, preserving all other fields.
+    """
+    total_tp_per_slot = sum(g.max_throughput for g in gpus)
+    counts: dict[int, int] = defaultdict(int)
+    for req in requests:
+        counts[req.arrival_t] += 1
+
+    repaired = []
+    for req in requests:
+        t = req.arrival_t
+        if counts[t] > total_tp_per_slot:
+            counts[t] -= 1
+            # move to the slot with the most remaining capacity
+            t = min(range(n_slots), key=lambda s: counts[s])
+            counts[t] += 1
+            req = Request(
+                id=req.id,
+                adapter_id=req.adapter_id,
+                arrival_t=t,
+                priority=req.priority,
+                latency_per_gpu=req.latency_per_gpu,
+            )
+        repaired.append(req)
+    return repaired
+
 
 def _check_feasibility(cfg: dict, gpus: list[GPU]) -> None:
-    #Raise if the instance is structurally infeasible before we even solve it.
     total_capacity = sum(g.max_throughput for g in gpus) * cfg["n_time_slots"]
     if cfg["n_requests"] > total_capacity:
         raise ValueError(
             f"Instance is infeasible: {cfg['n_requests']} requests but GPU cluster "
             f"can handle at most {total_capacity} across {cfg['n_time_slots']} slots. "
             "Lower n_requests or increase n_gpus / n_time_slots in config."
+        )
+
+    max_adapter_gb = cfg["adapter_memory_gb"]["max"]
+    if all(g.adapter_budget_gb < max_adapter_gb for g in gpus):
+        raise ValueError(
+            f"Instance is infeasible: largest possible adapter ({max_adapter_gb} GB) "
+            f"cannot fit on any GPU. Increase vram_gb or reduce adapter_memory_gb.max."
         )
