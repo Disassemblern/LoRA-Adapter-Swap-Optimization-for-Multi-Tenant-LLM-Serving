@@ -26,3 +26,12 @@ solver:
   mip_gap: 0.01         # accept solutions within 1% of optimal
   threads: 0            # 0 = let Gurobi choose automatically
   log_to_console: true  # print Gurobi's solving progress to the terminal
+
+genetic:
+  population_size: 60       # number of chromosomes in the population
+  n_generations: 200        # how many generations to evolve
+  crossover_rate: 0.85      # probability of two parents exchanging genes
+  mutation_rate: 0.02       # per-gene probability of flipping a GPU assignment
+  tournament_size: 4        # number of individuals that compete in selection
+  elite_count: 2            # top N individuals carried unchanged to next generation
+  seed: 0                   # random seed for reproducibility
