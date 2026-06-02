@@ -1,5 +1,5 @@
 """
-Parameter sweep: vary instance size, collect cost + timing data for Gurobi and GA.
+Parameter sweep: vary instance size, collect cost + timing data for Gurobi and SA.
 
 Usage (from project root):
     python experiments/run_sweep.py
@@ -17,7 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src import data_generator, model_gurobi
-from src.baselines.genetic import GeneticAlgorithm
+from src.baselines.simulated_annealing import SimulatedAnnealing
 from src import metrics
 
 
@@ -42,7 +42,7 @@ def run_cell(cfg: dict, seed: int, solver_name: str) -> dict:
         gap = sol.mip_gap
         wall = sol.wall_time_sec
     else:
-        sol = GeneticAlgorithm(cfg.get("genetic", {})).solve(inst)
+        sol = SimulatedAnnealing(cfg.get("simulated_annealing", {})).solve(inst)
         gap = 0.0
         wall = sol.wall_time_sec
 
@@ -75,7 +75,7 @@ def main() -> None:
                 cfg["instance"][param] = value
 
                 for seed in SEEDS:
-                    for solver in ["gurobi", "genetic"]:
+                    for solver in ["gurobi", "simulated_annealing"]:
                         done += 1
                         print(f"[{done}/{total_runs}] {param}={value} seed={seed} solver={solver}")
                         try:

@@ -1,5 +1,5 @@
 """
-Run Gurobi and Genetic Algorithm on one instance and compare costs.
+Run Gurobi and Simulated Annealing on one instance and compare costs.
 
 Usage (from project root):
     python experiments/run_single.py
@@ -15,7 +15,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src import data_generator, model_gurobi, visualize
-from src.baselines.genetic import GeneticAlgorithm
+from src.baselines.simulated_annealing import SimulatedAnnealing
 from src import metrics
 from src.solution import verify
 
@@ -42,15 +42,15 @@ def main() -> None:
     print(f"  status={sol_gurobi.status}, obj={sol_gurobi.objective:.4f}, "
           f"gap={sol_gurobi.mip_gap*100:.2f}%, time={sol_gurobi.wall_time_sec:.2f}s")
 
-    print("Solving with Genetic Algorithm...")
-    sol_ga = GeneticAlgorithm(cfg.get("genetic", {})).solve(inst)
-    print(f"  status={sol_ga.status}, obj={sol_ga.objective:.4f}, "
-          f"time={sol_ga.wall_time_sec:.2f}s")
+    print("Solving with Simulated Annealing...")
+    sol_sa = SimulatedAnnealing(cfg.get("simulated_annealing", {})).solve(inst)
+    print(f"  status={sol_sa.status}, obj={sol_sa.objective:.4f}, "
+          f"time={sol_sa.wall_time_sec:.2f}s")
 
     # verify
     print("\nVerifying solutions...")
     all_ok = True
-    for name, sol in [("gurobi", sol_gurobi), ("genetic", sol_ga)]:
+    for name, sol in [("gurobi", sol_gurobi), ("simulated_annealing", sol_sa)]:
         violations = verify(sol, inst)
         if violations:
             print(f"  [{name}] FAILED — {len(violations)} violation(s):")
@@ -66,17 +66,17 @@ def main() -> None:
 
     # cost comparison
     print("\nCost breakdown:")
-    print(f"  {'solver':<10} {'total':>8} {'latency':>8} {'swap':>8} {'priority':>8}")
-    print(f"  {'-'*10} {'-'*8} {'-'*8} {'-'*8} {'-'*8}")
-    sols = {"gurobi": sol_gurobi, "genetic": sol_ga}
+    print(f"  {'solver':<22} {'total':>8} {'latency':>8} {'swap':>8} {'priority':>8}")
+    print(f"  {'-'*22} {'-'*8} {'-'*8} {'-'*8} {'-'*8}")
+    sols = {"gurobi": sol_gurobi, "simulated_annealing": sol_sa}
     for name, sol in sols.items():
         m = metrics.decompose(sol, inst)
-        print(f"  {name:<10} {m['total']:>8.3f} {m['latency']:>8.3f} "
+        print(f"  {name:<22} {m['total']:>8.3f} {m['latency']:>8.3f} "
               f"{m['swap']:>8.3f} {m['priority']:>8.3f}")
 
     gurobi_total = metrics.decompose(sol_gurobi, inst)["total"]
-    ga_total = metrics.decompose(sol_ga, inst)["total"]
-    print(f"\n  Gurobi vs GA: {(ga_total - gurobi_total) / ga_total * 100:+.1f}% cost reduction by Gurobi")
+    sa_total = metrics.decompose(sol_sa, inst)["total"]
+    print(f"\n  Gurobi vs SA: {(sa_total - gurobi_total) / sa_total * 100:+.1f}% cost reduction by Gurobi")
 
     # charts
     out_dir = Path(args.out)
