@@ -1,5 +1,5 @@
 from src.data_types import Adapter, GPU, Request, Instance
-from src.baselines.genetic import GeneticAlgorithm
+from src.baselines.simulated_annealing import SimulatedAnnealing
 from src.solution import verify
 
 
@@ -18,20 +18,20 @@ def _small_instance() -> Instance:
                     n_time_slots=4, alpha=1.0, beta=2.0, gamma=0.5)
 
 
-def test_ga_passes_verification():
+def test_sa_passes_verification():
     inst = _small_instance()
-    sol = GeneticAlgorithm({"population_size": 20, "n_generations": 30, "seed": 0}).solve(inst)
+    sol = SimulatedAnnealing({"n_iterations": 500, "seed": 0}).solve(inst)
     violations = verify(sol, inst)
     assert violations == [], violations
 
 
-def test_ga_all_requests_assigned():
+def test_sa_all_requests_assigned():
     inst = _small_instance()
-    sol = GeneticAlgorithm({"population_size": 20, "n_generations": 30, "seed": 0}).solve(inst)
+    sol = SimulatedAnnealing({"n_iterations": 500, "seed": 0}).solve(inst)
     assert set(sol.assignments.keys()) == {r.id for r in inst.requests}
 
 
-def test_ga_objective_is_finite():
+def test_sa_objective_is_finite():
     inst = _small_instance()
-    sol = GeneticAlgorithm({"population_size": 20, "n_generations": 30, "seed": 0}).solve(inst)
+    sol = SimulatedAnnealing({"n_iterations": 500, "seed": 0}).solve(inst)
     assert sol.objective < 1e5
