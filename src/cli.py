@@ -1,7 +1,7 @@
 """
 Subcommands:
   generate  -- create a synthetic instance and save it to JSON
-  solve     -- solve a saved instance with gurobi or genetic
+  solve     -- solve a saved instance with gurobi or simulated_annealing
   verify    -- check that a solution satisfies all constraints
   plot      -- generate charts from a solution
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from src import data_generator, instance_io, model_gurobi, visualize
-from src.baselines.genetic import GeneticAlgorithm
+from src.baselines.simulated_annealing import SimulatedAnnealing
 from src.solution import solution_to_dict, solution_from_dict, verify
 
 def _load_cfg(path: str) -> dict:
@@ -38,8 +38,8 @@ def cmd_solve(args: argparse.Namespace) -> None:
 
     if args.solver == "gurobi":
         sol = model_gurobi.build_and_solve(inst, cfg["solver"])
-    elif args.solver == "genetic":
-        sol = GeneticAlgorithm(cfg.get("genetic", {})).solve(inst)
+    elif args.solver == "simulated_annealing":
+        sol = SimulatedAnnealing(cfg.get("simulated_annealing", {})).solve(inst)
     else:
         print(f"Unknown solver: {args.solver}", file=sys.stderr)
         sys.exit(1)
@@ -92,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sol = sub.add_parser("solve", help="Solve a problem instance")
     p_sol.add_argument("--instance", required=True, help="Path to instance JSON")
-    p_sol.add_argument("--solver", choices=["gurobi", "genetic"], default="gurobi")
+    p_sol.add_argument("--solver", choices=["gurobi", "simulated_annealing"], default="gurobi")
     p_sol.add_argument("--config", default="config/default.yaml")
     p_sol.add_argument("--out", help="Output JSON path")
 
