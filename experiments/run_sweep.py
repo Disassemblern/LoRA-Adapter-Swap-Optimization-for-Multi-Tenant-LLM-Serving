@@ -3,7 +3,7 @@ Parameter sweep: vary instance size, collect cost + timing data for Gurobi and S
 
 Usage (from project root):
     python experiments/run_sweep.py
-    python experiments/run_sweep.py --out results/sweep.csv
+    python experiments/run_sweep.py --out results/sweep/sweep.csv
 """
 from __future__ import annotations
 import argparse
@@ -53,7 +53,7 @@ def run_cell(cfg: dict, seed: int, solver_name: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/default.yaml")
-    parser.add_argument("--out", default="results/sweep.csv")
+    parser.add_argument("--out", default="results/sweep/sweep.csv")
     args = parser.parse_args()
 
     with open(args.config) as f:

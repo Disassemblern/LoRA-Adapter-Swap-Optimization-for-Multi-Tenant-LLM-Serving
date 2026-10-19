@@ -87,3 +87,11 @@ def test_throughput_exceeded_detected():
     )
     violations = verify(sol, inst2)
     assert any("max_throughput" in v for v in violations)
+
+
+def test_unreported_swap_detected():
+    inst = _tiny_instance()
+    sol = _valid_solution(inst)
+    sol.swaps[(0, 0, 0)] = False  # adapter loaded at t=0 but no swap reported
+    violations = verify(sol, inst)
+    assert any("swap" in v for v in violations)

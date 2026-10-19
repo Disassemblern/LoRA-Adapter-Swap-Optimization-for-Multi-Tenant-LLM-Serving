@@ -1,6 +1,6 @@
 from __future__ import annotations
 from src.data_types import Instance
-from src.solution import Solution
+from src.solution import Solution, swaps_from_schedule
 
 
 def decompose(sol: Solution, inst: Instance) -> dict[str, float]:
@@ -10,7 +10,10 @@ def decompose(sol: Solution, inst: Instance) -> dict[str, float]:
 
     We recompute from the solution dicts rather than trusting sol.objective
     because heuristic solutions compute their own objective approximation.
+    Swaps are derived from the adapter schedule, not from sol.swaps, so every
+    solver is charged by the same rule.
     """
+    swaps = swaps_from_schedule(sol.adapter_schedule, inst)
     latency = sum(
         req.latency_per_gpu[sol.assignments[req.id]]
         for req in inst.requests
@@ -22,7 +25,7 @@ def decompose(sol: Solution, inst: Instance) -> dict[str, float]:
         for a in inst.adapters
         for g in inst.gpus
         for t in range(inst.n_time_slots)
-        if sol.swaps.get((a.id, g.id, t), False)
+        if swaps[(a.id, g.id, t)]
     )
 
     priority = sum(

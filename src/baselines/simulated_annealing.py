@@ -191,7 +191,7 @@ def _build_schedule(
                     mem_used += a.memory_gb
 
             prev_loaded = (
-                {aid for aid in inst.adapters if adapter_schedule.get((aid, g.id, t - 1), False)}
+                {a.id for a in inst.adapters if adapter_schedule[(a.id, g.id, t - 1)]}
                 if t > 0
                 else set()
             )

@@ -26,7 +26,7 @@ def cmd_generate(args: argparse.Namespace) -> None:
     cfg = _load_cfg(args.config)
     seed = args.seed if args.seed is not None else cfg["instance"]["seed"]
     inst = data_generator.generate(cfg, seed=seed)
-    out = args.out or "results/instance.json"
+    out = args.out or "results/cli/instance.json"
     instance_io.save(inst, out)
     print(f"Instance saved to {out}")
     print(f"  adapters={len(inst.adapters)}, gpus={len(inst.gpus)}, "
@@ -44,7 +44,7 @@ def cmd_solve(args: argparse.Namespace) -> None:
         print(f"Unknown solver: {args.solver}", file=sys.stderr)
         sys.exit(1)
 
-    out = args.out or f"results/solution_{args.solver}.json"
+    out = args.out or f"results/cli/solution_{args.solver}.json"
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump(solution_to_dict(sol), f, indent=2)
@@ -69,7 +69,7 @@ def cmd_plot(args: argparse.Namespace) -> None:
     with open(args.solution) as f:
         sol = solution_from_dict(json.load(f))
 
-    out_dir = Path(args.out or "results/charts")
+    out_dir = Path(args.out or "results/cli/charts")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     visualize.plot_adapter_schedule(sol, inst, out_dir / "adapter_schedule.png")
@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_gen = sub.add_parser("generate", help="Create a synthetic problem instance")
     p_gen.add_argument("--config", default="config/default.yaml")
-    p_gen.add_argument("--out", help="Output JSON path (default: results/instance.json)")
+    p_gen.add_argument("--out", help="Output JSON path (default: results/cli/instance.json)")
     p_gen.add_argument("--seed", type=int, default=None)
 
     p_sol = sub.add_parser("solve", help="Solve a problem instance")
@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_plt = sub.add_parser("plot", help="Generate charts from a solution")
     p_plt.add_argument("--instance", required=True)
     p_plt.add_argument("--solution", required=True)
-    p_plt.add_argument("--out", help="Output directory (default: results/charts)")
+    p_plt.add_argument("--out", help="Output directory (default: results/cli/charts)")
 
     return parser
 

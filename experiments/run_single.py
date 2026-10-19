@@ -24,7 +24,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/default.yaml")
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--out", default="results", help="Output directory for charts")
+    parser.add_argument("--out", default="results/single", help="Output directory for charts")
     args = parser.parse_args()
 
     with open(args.config) as f:

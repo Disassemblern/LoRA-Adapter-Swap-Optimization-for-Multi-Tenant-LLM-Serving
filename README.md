@@ -2,7 +2,7 @@
 
 Optimal LoRA adapter loading and request routing for multi-tenant LLM serving.
 Formulated as a Mixed-Integer Program (MIP) and solved with Gurobi, with a
-Genetic Algorithm metaheuristic as a comparison baseline.
+Simulated Annealing metaheuristic as a comparison baseline.
 
 ---
 
@@ -10,7 +10,7 @@ Genetic Algorithm metaheuristic as a comparison baseline.
 
 In production LLM serving, a single base model is shared across many tasks via
 LoRA adapters. Each adapter must be loaded into GPU VRAM before it can serve a
-request. VRAM is limited, so adapters are swapped in and out dynamically —
+request. VRAM is limited, so adapters are swapped in and out dynamically
 and every swap costs time.
 
 The goal is to find the joint **adapter loading schedule** and **request routing**
@@ -89,17 +89,33 @@ delay[i] ≥ latency[i,j] · x[i,j]    for all i, j
 Solves the MIP to proven optimality (or within a configurable MIP gap).
 Requires a Gurobi license — academic and WLS licenses work.
 
-### Genetic Algorithm (metaheuristic)
-A population-based search used to benchmark how close a license-free heuristic
+### Simulated Annealing (metaheuristic)
+A single-solution local search used to benchmark how close a license-free heuristic
 can get to the Gurobi optimum.
 
-- **Chromosome**: integer array of length `n_requests` where `chrom[i] = gpu_id`
-- **Crossover**: uniform (gene-by-gene), rate `0.85`
-- **Mutation**: per-gene random GPU reassignment, rate `0.02`
-- **Selection**: tournament (size 4)
-- **Elitism**: top 2 chromosomes carried unchanged each generation
-- **Repair**: throughput violations fixed deterministically after each crossover/mutation
+- **Solution encoding**: integer array of length `n_requests` where `solution[i] = gpu_id`
+- **Neighbourhood move**: reassign one randomly chosen request to a different GPU
+- **Acceptance**: always accept improvements; accept worse solutions with probability `exp(-delta / T)`
+- **Cooling schedule**: geometric decay — `T(k) = T_start * cooling_rate^k`
+- **Repair**: throughput violations fixed deterministically after every move
 - **Adapter schedule**: derived greedily from assignments (largest-evict when VRAM full)
+
+### Results (default config, seed 42)
+
+| Solver | Total | Latency | Swap | Priority | Time |
+|---|---|---|---|---|---|
+| Gurobi | 287.889 | 109.393 | 31.120 | 232.510 | 0.07 s (optimal, gap < 1%) |
+| Simulated Annealing | 308.091 | 110.802 | 39.612 | 236.129 | 0.67 s |
+
+Across the parameter sweep (`experiments/run_sweep.py`), Gurobi's cost is
+5-15% lower than SA's (mean about 9%), and Gurobi solves every instance in
+under 0.5 s.
+
+> **Correction.** An earlier version reported SA at 1320.7. That figure came
+> from a bug in SA's schedule builder: every loaded adapter was counted as a
+> swap in every time slot. Swaps are now derived from the adapter schedule
+> for every solver (`solution.swaps_from_schedule`), and the verifier rejects
+> schedules whose loads are not reported as swaps.
 
 ---
 
@@ -112,27 +128,32 @@ src/
   instance_io.py       — save/load instances as JSON
   model_gurobi.py      — MIP formulation and Gurobi solve
   solution.py          — Solution dataclass, serialization, constraint verifier
-  metrics.py           — cost decomposition (latency / swap / priority)
+  metrics.py           — cost decomposition (latency / swap / priority; swaps derived from the schedule)
   visualize.py         — matplotlib charts
   cli.py               — CLI entry point
   baselines/
-    genetic.py         — Genetic Algorithm solver
+    simulated_annealing.py — Simulated Annealing solver
 
 config/
   default.yaml         — all tunable parameters
 
 experiments/
   run_single.py        — solve one instance with both solvers, print comparison
-  run_sweep.py         — parameter sweep, writes results/sweep.csv
-
-notebooks/
+  run_sweep.py         — parameter sweep, writes results/sweep/sweep.csv
   analysis.ipynb       — load sweep CSV, plot gap%, wall time, cost breakdown
+
+docs/
+  report.tex           — project report (LaTeX source)
 
 tests/
   test_data_generator.py
   test_model_gurobi.py
   test_verifier.py
   test_baselines.py
+  test_metrics.py
+
+results/               — generated, git-ignored; one subfolder per script
+  cli/  single/  sweep/
 ```
 
 ---
@@ -163,16 +184,14 @@ tests/
 | `threads` | `0` | CPU threads — `0` lets Gurobi choose automatically |
 | `log_to_console` | `true` | Print Gurobi solving progress |
 
-### Genetic Algorithm
+### Simulated Annealing
 
 | Key | Default | Description |
 |---|---|---|
-| `population_size` | `60` | Number of chromosomes per generation |
-| `n_generations` | `200` | How many generations to evolve |
-| `crossover_rate` | `0.85` | Probability two parents exchange genes |
-| `mutation_rate` | `0.02` | Per-gene probability of random GPU reassignment |
-| `tournament_size` | `4` | Candidates per selection tournament |
-| `elite_count` | `2` | Top individuals copied unchanged each generation |
+| `t_start` | `500.0` | Initial temperature |
+| `t_min` | `0.1` | Stop cooling below this temperature |
+| `cooling_rate` | `0.995` | Geometric decay factor applied each iteration |
+| `n_iterations` | `10000` | Maximum number of iterations |
 | `seed` | `0` | Random seed for reproducibility |
 
 ---
@@ -180,25 +199,23 @@ tests/
 ## Usage
 
 ```bash
-# Generate a synthetic instance
-python -m src.cli generate --config config/default.yaml --out results/instance.json
+# Generate a synthetic instance           -> results/cli/instance.json
+python -m src.cli generate
 
-# Solve with Gurobi
-python -m src.cli solve --instance results/instance.json --solver gurobi --out results/solution_gurobi.json
-
-# Solve with Genetic Algorithm
-python -m src.cli solve --instance results/instance.json --solver genetic --out results/solution_genetic.json
+# Solve with Gurobi or Simulated Annealing -> results/cli/solution_<solver>.json
+python -m src.cli solve --instance results/cli/instance.json --solver gurobi
+python -m src.cli solve --instance results/cli/instance.json --solver simulated_annealing
 
 # Verify a solution satisfies all constraints
-python -m src.cli verify --instance results/instance.json --solution results/solution_gurobi.json
+python -m src.cli verify --instance results/cli/instance.json --solution results/cli/solution_gurobi.json
 
-# Generate charts
-python -m src.cli plot --instance results/instance.json --solution results/solution_gurobi.json --out results/charts
+# Generate charts                          -> results/cli/charts/
+python -m src.cli plot --instance results/cli/instance.json --solution results/cli/solution_gurobi.json
 
-# Run both solvers and compare in one shot
+# Run both solvers and compare in one shot -> results/single/
 python experiments/run_single.py
 
-# Parameter sweep (writes results/sweep.csv)
+# Parameter sweep                          -> results/sweep/sweep.csv
 python experiments/run_sweep.py
 
 # Run tests
@@ -209,11 +226,6 @@ pytest -q
 
 ## Requirements
 
-```
-gurobipy >= 11.0
-numpy >= 1.26
-pandas >= 2.1
-matplotlib >= 3.8
-pyyaml >= 6.0
-pytest >= 8.0
-```
+Install with `pip install -e ".[dev]"` (dependencies are listed in `pyproject.toml`).
+The pip build of gurobipy includes a size-limited license (2000 variables and
+constraints), which covers the default instance and all tests.

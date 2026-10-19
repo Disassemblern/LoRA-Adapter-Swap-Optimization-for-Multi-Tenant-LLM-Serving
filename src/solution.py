@@ -55,6 +55,21 @@ def solution_from_dict(data: dict) -> Solution:
     )
 
 
+# swaps implied by a schedule
+
+def swaps_from_schedule(
+    schedule: dict[tuple[int, int, int], bool], inst: Instance
+) -> dict[tuple[int, int, int], bool]:
+    """A swap-in happens wherever an adapter is loaded at t but not at t-1 (GPUs start empty)."""
+    return {
+        (a.id, g.id, t): schedule.get((a.id, g.id, t), False)
+        and not (t > 0 and schedule.get((a.id, g.id, t - 1), False))
+        for a in inst.adapters
+        for g in inst.gpus
+        for t in range(inst.n_time_slots)
+    }
+
+
 # verifier
 
 def verify(sol: Solution, inst: Instance) -> list[str]:
@@ -112,5 +127,14 @@ def verify(sol: Solution, inst: Instance) -> list[str]:
                     f"GPU {g.id} at t={t}: {count} requests > "
                     f"max_throughput {g.max_throughput}."
                 )
+
+    # 5. Every load implied by the schedule must be reported as a swap
+    #    (over-reporting only wastes cost; under-reporting hides cost).
+    for key, swapped in swaps_from_schedule(sol.adapter_schedule, inst).items():
+        if swapped and not sol.swaps.get(key, False):
+            a, j, t = key
+            violations.append(
+                f"Adapter {a} loaded on GPU {j} at t={t} but no swap reported."
+            )
 
     return violations

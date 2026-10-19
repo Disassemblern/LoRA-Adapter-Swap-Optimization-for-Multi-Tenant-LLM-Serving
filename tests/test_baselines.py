@@ -35,3 +35,18 @@ def test_sa_objective_is_finite():
     inst = _small_instance()
     sol = SimulatedAnnealing({"n_iterations": 500, "seed": 0}).solve(inst)
     assert sol.objective < 1e5
+
+
+def test_sa_counts_one_swap_for_adapter_kept_loaded():
+    # Adapter 0 is needed in slots 0, 1 and 2 on the only GPU and always fits,
+    # so it is loaded once and stays: exactly one swap.
+    adapters = [Adapter(id=0, memory_gb=1.0, swap_cost=1.0)]
+    gpus = [GPU(id=0, vram_gb=20.0, base_model_gb=14.0, max_throughput=5)]
+    requests = [
+        Request(id=t, adapter_id=0, arrival_t=t, priority=1, latency_per_gpu=(1.0,))
+        for t in range(3)
+    ]
+    inst = Instance(adapters=adapters, gpus=gpus, requests=requests,
+                    n_time_slots=3, alpha=1.0, beta=2.0, gamma=0.5)
+    sol = SimulatedAnnealing({"n_iterations": 50, "seed": 0}).solve(inst)
+    assert sum(sol.swaps.values()) == 1
