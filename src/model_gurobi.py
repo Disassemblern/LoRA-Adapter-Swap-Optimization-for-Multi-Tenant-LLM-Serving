@@ -33,7 +33,7 @@ from src.solution import Solution
 
 def build_and_solve(inst: Instance, solver_cfg: dict) -> Solution:
     m = gp.Model("lora_swap")
-    _apply_solver_cfg(m, solver_cfg)
+    apply_solver_cfg(m, solver_cfg)
 
     x, y, s, delay = _add_variables(m, inst)
     _add_assignment_constraints(m, inst, x)
@@ -53,11 +53,23 @@ def build_and_solve(inst: Instance, solver_cfg: dict) -> Solution:
 
 # solver config 
 
-def _apply_solver_cfg(m: gp.Model, cfg: dict) -> None:
+def apply_solver_cfg(m: gp.Model, cfg: dict) -> None:
     m.Params.TimeLimit = cfg["time_limit_sec"]
     m.Params.MIPGap = cfg["mip_gap"]
     m.Params.Threads = cfg["threads"]
     m.Params.LogToConsole = int(cfg["log_to_console"])
+
+
+_STATUS_NAMES = {
+    GRB.OPTIMAL: "OPTIMAL",
+    GRB.TIME_LIMIT: "TIME_LIMIT",
+    GRB.INFEASIBLE: "INFEASIBLE",
+    GRB.UNBOUNDED: "UNBOUNDED",
+}
+
+
+def status_name(m: gp.Model) -> str:
+    return _STATUS_NAMES.get(m.Status, f"GUROBI_{m.Status}")
 
 
 # variables
@@ -233,13 +245,7 @@ def _extract_solution(
     s: gp.tupledict,
     wall_time: float,
 ) -> Solution:
-    status_map = {
-        GRB.OPTIMAL: "OPTIMAL",
-        GRB.TIME_LIMIT: "TIME_LIMIT",
-        GRB.INFEASIBLE: "INFEASIBLE",
-        GRB.UNBOUNDED: "UNBOUNDED",
-    }
-    status = status_map.get(m.Status, f"GUROBI_{m.Status}")
+    status = status_name(m)
 
     if m.SolCount == 0:
         raise RuntimeError(
